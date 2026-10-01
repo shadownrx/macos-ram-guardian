@@ -54,6 +54,29 @@ func footprint(_ pid: pid_t) -> UInt64 {
     return result == 0 ? info.ri_phys_footprint : 0
 }
 
+func childPIDs(_ pid: pid_t) -> [pid_t] {
+    var children = [pid_t](repeating: 0, count: 4096)
+    let count = children.withUnsafeMutableBytes {
+        proc_listchildpids(pid, $0.baseAddress, Int32($0.count))
+    }
+    guard count > 0 else { return [] }
+    return Array(children.prefix(min(Int(count), children.count))).filter { $0 > 0 }
+}
+
+// Used only to rank applications; termination still targets the regular app.
+// Shared allocations can appear in several footprints, so this is an estimate.
+func treeFootprint(_ root: pid_t, children: (pid_t) -> [pid_t] = childPIDs,
+                   measure: (pid_t) -> UInt64 = footprint) -> UInt64 {
+    var pending = [root], visited = Set<pid_t>(), total: UInt64 = 0
+    while let pid = pending.popLast(), visited.count < 8192 {
+        guard visited.insert(pid).inserted else { continue }
+        let sum = total.addingReportingOverflow(measure(pid))
+        total = sum.overflow ? UInt64.max : sum.partialValue
+        pending.append(contentsOf: children(pid))
+    }
+    return total
+}
+
 func swapUsed() -> UInt64? {
     var info = xsw_usage()
     var size = MemoryLayout<xsw_usage>.size
@@ -130,7 +153,10 @@ func selfTest() {
     precondition(!eligible(Candidate(pid: 1, bundle: "com.openai.codex", idle: 9000,
         footprint: 10, foreground: false, regular: true), permissive, pressure: 4,
         pressureDuration: 100, cooldown: 100, sinceAttempt: 9000))
-    print("14 policy checks passed")
+    precondition(treeFootprint(1, children: { [1: [2, 3], 2: [4], 3: [4], 4: [1]][$0] ?? [] },
+        measure: { UInt64($0) * 10 }) == 100)
+    precondition(treeFootprint(1, children: { _ in [] }, measure: { _ in 0 }) == 0)
+    print("14 policy checks and 2 process-tree checks passed")
 }
 
 if CommandLine.arguments.contains("--self-test") { selfTest(); exit(0) }
@@ -162,7 +188,8 @@ if CommandLine.arguments.contains("--probe") {
     let apps = NSWorkspace.shared.runningApplications.compactMap { app -> [String: Any]? in
         guard let bundle = app.bundleIdentifier else { return nil }
         return ["bundle": bundle, "pid": app.processIdentifier,
-                "foreground": app.isActive, "footprintBytes": footprint(app.processIdentifier)]
+                "foreground": app.isActive, "footprintBytes": footprint(app.processIdentifier),
+                "treeFootprintBytes": treeFootprint(app.processIdentifier)]
     }
     let result: [String: Any] = ["pressure": pressureLevel() ?? -1,
         "swapUsedBytes": swapUsed() ?? 0, "apps": apps]
@@ -183,7 +210,7 @@ final class Guardian {
     var lastTelemetry = -Double.greatestFiniteMagnitude
 
     func start() {
-        log("started", ["pid": getpid(), "version": 1])
+        log("started", ["pid": getpid(), "version": 2])
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
             object: nil, queue: .main) { [weak self] notification in
@@ -236,11 +263,15 @@ final class Guardian {
             log("pressure_changed", ["pressure": pressure, "swapUsedBytes": swapUsed() ?? 0])
         }
         let monitored = apps.filter { config.allowedBundles.contains($0.bundleIdentifier ?? "") }
+        let treeBytes = Dictionary(uniqueKeysWithValues: monitored.map {
+            ($0.processIdentifier, treeFootprint($0.processIdentifier))
+        })
         let rows: [[String: Any]] = monitored.map { app in
             ["bundle": app.bundleIdentifier ?? "", "pid": app.processIdentifier,
              "idleSeconds": Int(now - (lastActive[app.processIdentifier] ?? now)),
              "foreground": app.isActive || app.processIdentifier == frontmostPID,
-             "footprintBytes": footprint(app.processIdentifier)]
+             "footprintBytes": footprint(app.processIdentifier),
+             "treeFootprintBytes": treeBytes[app.processIdentifier] ?? 0]
         }
         writeJSON(["time": ISO8601DateFormatter().string(from: Date()), "pid": getpid(),
             "enabled": config.enabled, "pressure": pressure,
@@ -261,7 +292,7 @@ final class Guardian {
             return eligible(candidate, config, pressure: pressure,
                 pressureDuration: now - pressureSince, cooldown: now - lastAction,
                 sinceAttempt: now - (lastAttempt[pid] ?? -Double.greatestFiniteMagnitude))
-        }.sorted { footprint($0.processIdentifier) > footprint($1.processIdentifier) }
+        }.sorted { (treeBytes[$0.processIdentifier] ?? 0) > (treeBytes[$1.processIdentifier] ?? 0) }
         guard let app = candidates.first, !app.isTerminated, !app.isActive,
               app.processIdentifier != NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
         let pid = app.processIdentifier
@@ -270,7 +301,7 @@ final class Guardian {
         let bytes = footprint(pid)
         let accepted = app.terminate()
         log("quit_requested", ["bundle": bundle, "pid": pid, "accepted": accepted,
-            "footprintBytes": bytes, "pressure": pressure,
+            "footprintBytes": bytes, "treeFootprintBytes": treeBytes[pid] ?? 0, "pressure": pressure,
             "idleSeconds": Int(now - (lastActive[pid] ?? now))])
         if accepted { pending[pid] = bundle }
     }

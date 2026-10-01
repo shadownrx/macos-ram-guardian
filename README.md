@@ -36,6 +36,7 @@ Servicio local para macOS, ejecutado al iniciar sesión mediante `local.codex.ra
 - Ante advertencia durante 90 segundos: solicita salida normal de una aplicación autorizada que lleve 20 minutos sin estar en primer plano.
 - Ante presión crítica durante 15 segundos: usa un mínimo de 5 minutos de inactividad.
 - Espera al menos un minuto entre acciones y 30 minutos antes de volver a pedir salida al mismo proceso.
+- Prioriza por la suma estimada de memoria física del proceso principal y sus descendientes, incluyendo renderizadores del navegador. La memoria compartida puede contarse varias veces; la suma sirve para ordenar candidatos, no como total exacto del sistema.
 - Da 2 minutos de margen al iniciar y después de despertar de la suspensión.
 - Nunca usa salida forzada, SIGKILL, borrado de swap, cambios de SIP ni cambios del kernel.
 - Protege el primer plano, Codex, Orca, editores, terminales y Finder. No termina sesiones CLI ni servidores arbitrarios.

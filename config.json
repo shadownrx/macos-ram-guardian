@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "idleSeconds": 1200,
+  "criticalIdleSeconds": 300,
+  "warningSeconds": 90,
+  "criticalSeconds": 15,
+  "actionInterval": 60,
+  "retrySeconds": 1800,
+  "allowedBundles": [
+    "com.tinyspeck.slackmacgap",
+    "net.whatsapp.WhatsApp",
+    "com.linear",
+    "at.studio.AsideBrowser",
+    "app.zen-browser.zen",
+    "app.cotypist.Cotypist",
+    "com.facmartoni.DepotBar"
+  ]
+}

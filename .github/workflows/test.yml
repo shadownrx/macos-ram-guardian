@@ -1,0 +1,15 @@
+name: macOS tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native monitor and run policy checks
+        run: |
+          mkdir -p .build/module-cache
+          xcrun swiftc -O -module-cache-path .build/module-cache RAMGuardian.swift -o .build/ram-guardian
+          .build/ram-guardian --self-test
+          sh -n install.sh uninstall.sh scripts/test.sh

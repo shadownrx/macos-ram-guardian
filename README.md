@@ -54,6 +54,25 @@ Lista inicial: Slack, WhatsApp, Linear, Aside, Zen, Cotypist y DepotBar. Las apl
 
 `~/Library/LaunchAgents/local.codex.ram-guardian.plist`: inicio automático y reinicio si el monitor falla.
 
+## Prevención dentro de Firefox y Zen en macOS
+
+El navegador puede descargar pestañas inactivas y conservarlas en la sesión, sin cerrar toda la aplicación. Este ajuste es independiente del servicio y el instalador no modifica perfiles de navegador.
+
+En `about:config`, revisar estos valores:
+
+| Preferencia | Valor | Efecto |
+| --- | --- | --- |
+| `browser.tabs.unloadOnLowMemory` | `true` | Permite descargar pestañas ante poca memoria. |
+| `browser.lowMemoryResponseMask` | `3` | Activa descarga de pestañas y notificación interna de reducción de memoria en macOS. |
+| `browser.lowMemoryResponseOnWarn` | `true` | Responde en advertencia, antes de presión crítica. |
+| `browser.tabs.min_inactive_duration_before_unload` | `300000` | Considera pestañas con al menos cinco minutos de inactividad. |
+
+La disponibilidad y los valores predeterminados dependen de la versión. Verificados en los recursos de Zen 1.22.3b: descarga habilitada, máscara `0`, respuesta en advertencia deshabilitada y mínimo de diez minutos. La máscara `0` deshabilita esta respuesta específica de macOS, aunque existan otros mecanismos de gestión de memoria.
+
+El mínimo de cinco minutos no es un temporizador que descargue todas las pestañas: también necesita presión de memoria y que la pestaña sea elegible. Una pestaña descargada se vuelve a cargar al seleccionarla; su estado dinámico puede cambiar. No garantiza corregir una fuga en la pestaña activa. Cambiar un archivo `user.js` requiere volver a abrir el navegador; conservar copia de cualquier configuración anterior.
+
+Semántica documentada en el [código de preferencias de Mozilla](https://github.com/mozilla-firefox/firefox/blob/main/browser/app/profile/firefox.js) y en la [ayuda de descarga de pestañas](https://support.mozilla.org/en-US/kb/unload-inactive-tabs-save-system-memory-firefox).
+
 ## Desactivar
 
 ```sh

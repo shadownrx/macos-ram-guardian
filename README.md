@@ -38,7 +38,10 @@ Servicio local para macOS, ejecutado al iniciar sesión mediante `local.codex.ra
 - Espera al menos un minuto entre acciones y 30 minutos antes de volver a pedir salida al mismo proceso.
 - Prioriza por la suma estimada de memoria física del proceso principal y sus descendientes, incluyendo renderizadores del navegador. La memoria compartida puede contarse varias veces; la suma sirve para ordenar candidatos, no como total exacto del sistema.
 - Da 2 minutos de margen al iniciar y después de despertar de la suspensión.
-- Nunca usa salida forzada, SIGKILL, borrado de swap, cambios de SIP ni cambios del kernel.
+- Las aplicaciones nunca se cierran a la fuerza. No borra swap ni cambia SIP o el kernel.
+- Limpieza opcional de procesos de desarrollo (desactivada por defecto; se activa con `"killProcesses": true`): bajo la misma presión sostenida termina Pylance si supera `pylanceLimitMB` (1024 por defecto; VS Code lo relanza) y procesos huérfanos (padre = launchd) de python/node/uv/next/pytest/uvicorn con más de 2 minutos que no sean jobs de launchd. Envía SIGTERM y, si sigue vivo a los 10 s, SIGKILL. `ram-guardian --probe-kill` muestra qué terminaría sin hacerlo.
+- `minFootprintMB` (opcional, por bundle): no cierra esa aplicación si su árbol de procesos consume menos de ese valor, p. ej. `"minFootprintMB": {"com.facmartoni.DepotBar": 1024}`.
+- Notifica cada cierre o terminación (`"notify": false` lo desactiva).
 - Protege el primer plano, Codex, Orca, editores, terminales y Finder. No termina sesiones CLI ni servidores arbitrarios.
 - La aplicación decide si acepta la salida. Puede conservar un diálogo de guardado o rechazarla.
 
